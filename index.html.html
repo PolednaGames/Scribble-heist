@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scribble Heist</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #0D0F1A; --yellow: #FFE135; --coral: #FF5C5C;
+    --chalk: #F5F5F0; --muted: #6B6F85; --card-bg: #171929;
+    --border: rgba(255,255,255,0.08); --green: #4BFFB5; --purple: #B45CFF;
+  }
+  body { background:var(--ink); color:var(--chalk); font-family:'Inter',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+
+  .screen { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:24px; padding-top:40px; opacity:0; pointer-events:none; transition:opacity 0.3s ease; overflow-y:auto; }
+  .screen.active { opacity:1; pointer-events:all; }
+  .screen-center { justify-content:center; }
+
+  /* ── DOODLE BG ── */
+  .doodle-bg { position:fixed; inset:0; pointer-events:none; z-index:-1; overflow:hidden; }
+  .doodle-bg svg { position:absolute; opacity:0.04; animation:float 8s ease-in-out infinite; }
+  @keyframes float { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-12px) rotate(3deg)} }
+
+  /* ── BUTTONS ── */
+  .btn-primary { font-family:'Fredoka One',cursive; font-size:20px; background:var(--yellow); color:var(--ink); border:none; border-radius:16px; padding:16px 48px; cursor:pointer; box-shadow:0 6px 0 #B8A200; transition:transform 0.12s,box-shadow 0.12s; white-space:nowrap; }
+  .btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 0 #B8A200; }
+  .btn-primary:active { transform:translateY(3px); box-shadow:0 3px 0 #B8A200; }
+  .btn-ghost { font-family:'Inter',sans-serif; font-size:14px; font-weight:600; background:transparent; color:var(--muted); border:1.5px solid var(--border); border-radius:12px; padding:12px 28px; cursor:pointer; transition:color 0.2s,border-color 0.2s; }
+  .btn-ghost:hover { color:var(--chalk); border-color:rgba(255,255,255,0.2); }
+  .btn-stop { font-family:'Fredoka One',cursive; font-size:18px; background:var(--coral); color:white; border:none; border-radius:14px; padding:16px 44px; cursor:pointer; box-shadow:0 5px 0 #B83A3A; transition:all 0.12s; }
+  .btn-stop:hover { transform:translateY(-2px); }
+  .btn-stop:active { transform:translateY(3px); box-shadow:0 2px 0 #B83A3A; }
+  .btn-row { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+
+  /* ── TYPOGRAPHY ── */
+  .logo-mark { font-family:'Fredoka One',cursive; font-size:clamp(52px,12vw,96px); color:var(--yellow); line-height:0.9; text-align:center; text-shadow:4px 4px 0 rgba(255,225,53,0.2); }
+  .logo-sub { font-family:'Fredoka One',cursive; font-size:clamp(16px,3.5vw,24px); color:var(--chalk); opacity:0.45; letter-spacing:6px; text-transform:uppercase; margin-top:4px; margin-bottom:36px; text-align:center; }
+  .screen-title { font-family:'Fredoka One',cursive; font-size:30px; color:var(--chalk); text-align:center; margin-bottom:4px; }
+  .screen-hint { font-size:13px; color:var(--muted); text-align:center; margin-bottom:8px; }
+  .tagline { font-size:15px; color:var(--muted); text-align:center; max-width:280px; line-height:1.6; margin-bottom:36px; }
+
+  /* ── CARDS ── */
+  .card { background:var(--card-bg); border:1px solid var(--border); border-radius:20px; padding:20px; width:100%; }
+  .card-label { font-size:11px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+
+  /* ── HOME ── */
+  #home { justify-content:center; gap:0; }
+
+  /* ── HOW TO PLAY ── */
+  #howtoplay { gap:16px; max-width:440px; width:100%; padding-bottom:40px; }
+  .rule-step { display:flex; gap:16px; align-items:flex-start; }
+  .rule-num { font-family:'Fredoka One',cursive; font-size:32px; color:var(--yellow); line-height:1; min-width:36px; }
+  .rule-body { padding-top:4px; }
+  .rule-title { font-family:'Fredoka One',cursive; font-size:18px; color:var(--chalk); margin-bottom:3px; }
+  .rule-desc { font-size:13px; color:var(--muted); line-height:1.55; }
+  .rule-divider { height:1px; background:var(--border); width:100%; }
+  .scoring-legend { display:flex; flex-wrap:wrap; gap:10px; }
+  .sl-item { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:10px; padding:8px 14px; font-size:13px; display:flex; align-items:center; gap:8px; }
+  .sl-pts { font-family:'Fredoka One',cursive; font-size:18px; }
+
+  /* ── SETUP ── */
+  #setup { gap:16px; max-width:420px; width:100%; }
+  .timer-options { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .timer-opt { background:transparent; border:1.5px solid var(--border); border-radius:12px; padding:14px 8px; text-align:center; cursor:pointer; transition:all 0.15s; color:var(--chalk); }
+  .timer-opt .t-num { font-family:'Fredoka One',cursive; font-size:24px; display:block; color:var(--yellow); }
+  .timer-opt .t-label { font-size:11px; color:var(--muted); display:block; margin-top:2px; }
+  .timer-opt:hover,.timer-opt.selected { border-color:var(--yellow); background:rgba(255,225,53,0.07); }
+  .players-input { display:flex; align-items:center; gap:16px; }
+  .count-btn { width:44px; height:44px; border-radius:50%; border:1.5px solid var(--border); background:transparent; color:var(--chalk); font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; font-family:'Fredoka One',cursive; }
+  .count-btn:hover { border-color:var(--yellow); color:var(--yellow); }
+  .count-display { font-family:'Fredoka One',cursive; font-size:42px; color:var(--yellow); flex:1; text-align:center; }
+  .count-sub { font-size:12px; color:var(--muted); text-align:center; }
+
+  /* ── PLAYER NAMES ── */
+  .player-names-grid { display:flex; flex-direction:column; gap:8px; }
+  .pn-row { display:flex; align-items:center; gap:10px; }
+  .pn-avatar { font-size:22px; flex-shrink:0; }
+  .pn-input { flex:1; background:rgba(255,255,255,0.05); border:1.5px solid var(--border); border-radius:10px; padding:9px 14px; color:var(--chalk); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; outline:none; transition:border-color 0.15s; }
+  .pn-input:focus { border-color:rgba(255,225,53,0.5); }
+
+  /* ── AI PROMPT ── */
+  .ai-btn { width:100%; font-family:'Fredoka One',cursive; font-size:16px; background:linear-gradient(135deg,#7B4FFF,#B45CFF); color:white; border:none; border-radius:12px; padding:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity 0.2s; }
+  .ai-btn:hover { opacity:0.88; }
+  .ai-btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .ai-loading { display:inline-block; animation:spin 0.7s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ── ROUND INTRO ── */
+  #round-intro { gap:14px; max-width:400px; width:100%; }
+  .round-badge { background:var(--coral); font-family:'Fredoka One',cursive; font-size:13px; letter-spacing:2px; text-transform:uppercase; padding:6px 18px; border-radius:99px; color:white; align-self:center; }
+  .prompt-card { background:var(--yellow); border-radius:24px; padding:36px 32px; width:100%; text-align:center; box-shadow:0 10px 0 #B8A200,0 20px 40px rgba(255,225,53,0.15); animation:cardDrop 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+  @keyframes cardDrop { from{transform:translateY(-40px) rotate(-3deg);opacity:0} to{transform:translateY(0) rotate(0);opacity:1} }
+  .prompt-eyebrow { font-size:11px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:rgba(13,15,26,0.45); margin-bottom:10px; }
+  .prompt-text { font-family:'Fredoka One',cursive; font-size:clamp(26px,6vw,42px); color:var(--ink); line-height:1.1; }
+  .bonus-header { font-size:11px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; text-align:center; }
+  .bonus-items { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .bonus-chip { background:var(--card-bg); border:1.5px solid var(--border); border-radius:12px; padding:9px 16px; font-size:14px; display:flex; align-items:center; gap:7px; opacity:0; transform:scale(0.8); animation:chipPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards; position:relative; overflow:hidden; cursor:pointer; user-select:none; }
+  @keyframes chipPop { to{opacity:1;transform:scale(1)} }
+  .chip-icon { font-size:18px; }
+  .chip-name { font-size:12px; font-weight:600; color:var(--chalk); }
+  .chip-pts { font-size:11px; color:var(--green); font-weight:700; margin-left:4px; }
+  .chip-cover { position:absolute; inset:0; background:var(--card-bg); border-radius:10px; display:flex; align-items:center; justify-content:center; gap:5px; transition:opacity 0.25s; border:1.5px solid rgba(255,255,255,0.06); }
+  .chip-cover-icon { font-size:14px; }
+  .chip-cover-text { font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; }
+  .bonus-chip.peeking .chip-cover { opacity:0; pointer-events:none; }
+
+  /* ── TIMER ── */
+  #timer-screen { gap:16px; justify-content:center; }
+  .timer-ring-wrap { position:relative; width:200px; height:200px; flex-shrink:0; }
+  .timer-ring-wrap svg { transform:rotate(-90deg); position:absolute; inset:0; }
+  .timer-track { fill:none; stroke:var(--card-bg); stroke-width:10; }
+  .timer-progress { fill:none; stroke:var(--yellow); stroke-width:10; stroke-linecap:round; transition:stroke-dashoffset 1s linear,stroke 0.3s; }
+  .timer-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .timer-number { font-family:'Fredoka One',cursive; font-size:60px; color:var(--chalk); line-height:1; transition:color 0.3s; }
+  .timer-number.urgent { color:var(--coral); }
+  .timer-label { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .timer-prompt-small { font-family:'Fredoka One',cursive; font-size:20px; color:var(--chalk); text-align:center; max-width:320px; line-height:1.2; }
+  .timer-bonus-reminder { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:14px 18px; max-width:340px; width:100%; }
+  .tbr-label { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .tbr-items { display:flex; gap:8px; flex-wrap:wrap; }
+  .tbr-item { font-size:12px; background:rgba(255,255,255,0.05); border-radius:8px; padding:4px 10px; color:var(--chalk); filter:blur(5px); transition:filter 0.3s; }
+  .tbr-item.revealed { filter:none; }
+
+  /* ── SCORING ── */
+  #scoring { gap:14px; max-width:460px; width:100%; padding-bottom:40px; }
+  .scoring-prompt { font-family:'Fredoka One',cursive; font-size:18px; color:var(--muted); text-align:center; }
+  .scoring-prompt strong { color:var(--yellow); }
+  .score-players { display:flex; flex-direction:column; gap:10px; width:100%; }
+  .score-row { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:14px 16px; display:flex; align-items:flex-start; gap:12px; }
+  .score-avatar { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; margin-top:2px; }
+  .score-name { font-weight:700; font-size:14px; margin-bottom:6px; }
+  .score-pts { font-family:'Fredoka One',cursive; font-size:26px; color:var(--yellow); min-width:44px; text-align:right; align-self:center; }
+
+  /* scoring sub-sections */
+  .score-section-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .score-bonus-chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .sbc { font-size:11px; padding:4px 9px; border-radius:7px; font-weight:600; cursor:pointer; border:1.5px solid transparent; transition:all 0.15s; user-select:none; }
+  .sbc.unchecked { background:rgba(255,255,255,0.05); color:var(--muted); border-color:var(--border); }
+  .sbc.checked { background:rgba(75,255,181,0.15); color:var(--green); border-color:var(--green); }
+
+  /* star creativity */
+  .star-row { display:flex; gap:3px; }
+  .star { font-size:18px; cursor:pointer; opacity:0.25; transition:opacity 0.1s,transform 0.1s; user-select:none; }
+  .star.lit { opacity:1; }
+  .star:hover { transform:scale(1.2); }
+
+  /* best drawing vote */
+  .best-drawing-section { width:100%; }
+  .best-drawing-grid { display:flex; gap:8px; flex-wrap:wrap; }
+  .bd-btn { background:rgba(255,255,255,0.04); border:1.5px solid var(--border); border-radius:10px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; color:var(--chalk); transition:all 0.15s; display:flex; align-items:center; gap:6px; }
+  .bd-btn:hover { border-color:var(--purple); }
+  .bd-btn.voted { background:rgba(180,92,255,0.15); border-color:var(--purple); color:var(--purple); }
+
+  /* ── LEADERBOARD ── */
+  #leaderboard { gap:16px; max-width:400px; width:100%; }
+  .leaderboard-list { width:100%; display:flex; flex-direction:column; gap:10px; }
+  .lb-row { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:16px 20px; display:flex; align-items:center; gap:12px; }
+  .lb-row.first { border-color:var(--yellow); background:rgba(255,225,53,0.05); box-shadow:0 0 24px rgba(255,225,53,0.1); }
+  .lb-rank { font-family:'Fredoka One',cursive; font-size:20px; min-width:32px; text-align:center; }
+  .lb-row.first .lb-rank { color:var(--yellow); }
+  .lb-avatar { font-size:26px; }
+  .lb-name { font-weight:600; font-size:15px; flex:1; }
+  .lb-score { font-family:'Fredoka One',cursive; font-size:28px; color:var(--chalk); }
+  .lb-row.first .lb-score { color:var(--yellow); }
+
+  /* ── MISC ── */
+  .spacer { flex:1; }
+  @media(max-height:650px) { .screen { padding-top:20px; } .logo-mark { font-size:48px; } }
+
+  /* ── FOOTER ── */
+  .game-footer { position:fixed; bottom:0; left:0; right:0; text-align:center; padding:10px; font-size:11px; color:rgba(107,111,133,0.5); letter-spacing:1.5px; text-transform:uppercase; pointer-events:none; z-index:10; }
+  .game-footer span { color:rgba(107,111,133,0.35); }
+</style>
+</head>
+<body>
+
+<div class="doodle-bg">
+  <svg width="200" height="200" style="top:5%;left:5%;animation-delay:0s" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke="white" stroke-width="3" fill="none"/><line x1="20" y1="50" x2="80" y2="50" stroke="white" stroke-width="3"/><line x1="50" y1="20" x2="50" y2="80" stroke="white" stroke-width="3"/></svg>
+  <svg width="120" height="120" style="top:10%;right:8%;animation-delay:2s" viewBox="0 0 100 100"><polygon points="50,10 90,90 10,90" stroke="white" stroke-width="4" fill="none"/></svg>
+  <svg width="160" height="80" style="bottom:15%;left:3%;animation-delay:4s" viewBox="0 0 200 80"><path d="M10,40 Q50,10 100,40 Q150,70 190,40" stroke="white" stroke-width="4" fill="none"/></svg>
+  <svg width="100" height="100" style="bottom:12%;right:5%;animation-delay:1s" viewBox="0 0 100 100"><rect x="15" y="15" width="70" height="70" stroke="white" stroke-width="4" fill="none" transform="rotate(15,50,50)"/></svg>
+</div>
+
+<!-- ══ HOME ══ -->
+<div id="home" class="screen screen-center">
+  <div class="logo-mark">Scribble<br>Heist</div>
+  <div class="logo-sub">Draw · Scheme · Win</div>
+  <p class="tagline">A party drawing game where secret bonus items can steal the round — draw on paper, score on your phone.</p>
+  <button class="btn-primary" onclick="go('setup')">Start the Heist</button>
+  <button class="btn-ghost" style="margin-top:14px" onclick="go('howtoplay')">How to Play</button>
+  <button class="btn-ghost" style="margin-top:8px" onclick="buildLeaderboard();go('leaderboard')">View Scores</button>
+</div>
+
+<!-- ══ HOW TO PLAY ══ -->
+<div id="howtoplay" class="screen">
+  <div class="screen-title" style="margin-bottom:6px">How to Play</div>
+  <p class="screen-hint" style="margin-bottom:20px">Read once, play forever</p>
+
+  <div class="rule-step">
+    <div class="rule-num">1</div>
+    <div class="rule-body">
+      <div class="rule-title">Get paper &amp; pens</div>
+      <div class="rule-desc">Everyone grabs something to draw on — paper, a whiteboard, a napkin. No tablets needed.</div>
+    </div>
+  </div>
+  <div class="rule-divider"></div>
+
+  <div class="rule-step">
+    <div class="rule-num">2</div>
+    <div class="rule-body">
+      <div class="rule-title">See your scene &amp; secret items</div>
+      <div class="rule-desc">Everyone sees the same scene prompt. Then the app reveals 3–4 <strong style="color:var(--green)">secret bonus items</strong> — sneak them into your drawing for extra points.</div>
+    </div>
+  </div>
+  <div class="rule-divider"></div>
+
+  <div class="rule-step">
+    <div class="rule-num">3</div>
+    <div class="rule-body">
+      <div class="rule-title">Draw! Timer is live</div>
+      <div class="rule-desc">Pick your mode — 30 sec chaos, 60 sec standard, or 2 min for detail. The ring counts down. Pencils down when it hits zero.</div>
+    </div>
+  </div>
+  <div class="rule-divider"></div>
+
+  <div class="rule-step">
+    <div class="rule-num">4</div>
+    <div class="rule-body">
+      <div class="rule-title">Hold up your drawings &amp; score</div>
+      <div class="rule-desc">Everyone reveals. Tap which bonus items each player included, rate creativity with stars, and vote for the best overall drawing.</div>
+    </div>
+  </div>
+  <div class="rule-divider"></div>
+
+  <div class="card">
+    <div class="card-label">🏅 How points work</div>
+    <div class="scoring-legend">
+      <div class="sl-item"><span class="sl-pts" style="color:var(--green)">+1–4</span><span>per bonus item drawn</span></div>
+      <div class="sl-item"><span class="sl-pts" style="color:var(--yellow)">+1–3</span><span>creativity stars</span></div>
+      <div class="sl-item"><span class="sl-pts" style="color:var(--purple)">+3</span><span>best drawing vote</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="background:rgba(255,225,53,0.06);border-color:rgba(255,225,53,0.2)">
+    <div class="card-label" style="color:var(--yellow)">💡 Pro tip</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6">The funnier (or worse) the drawing, the better. Bad art wins hearts. Bonus items hidden in clever spots score big.</div>
+  </div>
+
+  <button class="btn-primary" onclick="go('setup')">Got it — let's play!</button>
+  <button class="btn-ghost" style="margin-top:10px" onclick="go('home')">← Back</button>
+</div>
+
+<!-- ══ SETUP ══ -->
+<div id="setup" class="screen">
+  <div class="screen-title">Game Setup</div>
+  <p class="screen-hint">Tweak it, name everyone, then heist</p>
+
+  <div class="card">
+    <div class="card-label">⏱ Round Timer</div>
+    <div class="timer-options">
+      <div class="timer-opt selected" onclick="selectTimer(this,30)"><span class="t-num">30</span><span class="t-label">Chaos</span></div>
+      <div class="timer-opt" onclick="selectTimer(this,60)"><span class="t-num">60</span><span class="t-label">Standard</span></div>
+      <div class="timer-opt" onclick="selectTimer(this,120)"><span class="t-num">2m</span><span class="t-label">Detail</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">👥 Players</div>
+    <div class="players-input">
+      <button class="count-btn" onclick="changeCount(-1)">−</button>
+      <div><div class="count-display" id="playerCount">4</div><div class="count-sub">players</div></div>
+      <button class="count-btn" onclick="changeCount(1)">+</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">✏️ Player Names</div>
+    <div class="player-names-grid" id="playerNamesGrid"></div>
+  </div>
+
+  <button class="ai-btn" id="aiPromptBtn" onclick="generateAIPrompt()">
+    <span>✨</span><span id="aiPromptBtnLabel">Generate AI Prompt Pack</span>
+  </button>
+  <div id="aiPromptPreview" style="display:none;width:100%"></div>
+
+  <button class="btn-primary" onclick="startRound()">Deal the Prompt →</button>
+  <button class="btn-ghost" style="margin-top:4px" onclick="go('home')">← Back</button>
+</div>
+
+<!-- ══ ROUND INTRO ══ -->
+<div id="round-intro" class="screen screen-center" style="gap:14px;max-width:400px;margin:0 auto;width:100%">
+  <div class="round-badge" id="roundBadge">Round 1</div>
+  <div class="prompt-card">
+    <div class="prompt-eyebrow">Draw this scene</div>
+    <div class="prompt-text" id="promptText">A chaotic birthday party</div>
+  </div>
+  <div style="width:100%">
+    <div class="bonus-header">🎯 Secret Bonus Items</div>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">Hold the phone close — tap each item to peek, then pass it around</p>
+    <div class="bonus-items" id="bonusItems"></div>
+  </div>
+  <button class="btn-primary" onclick="go('timer-screen');startTimer()">Start Drawing!</button>
+</div>
+
+<!-- ══ TIMER ══ -->
+<div id="timer-screen" class="screen screen-center" style="gap:16px">
+  <div class="timer-ring-wrap">
+    <svg viewBox="0 0 200 200" width="200" height="200">
+      <circle class="timer-track" cx="100" cy="100" r="90"/>
+      <circle class="timer-progress" id="timerRing" cx="100" cy="100" r="90" stroke-dasharray="565" stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-center">
+      <div class="timer-number" id="timerNumber">60</div>
+      <div class="timer-label">seconds</div>
+    </div>
+  </div>
+  <div class="timer-prompt-small" id="timerPromptSmall"></div>
+  <div class="timer-bonus-reminder">
+    <div class="tbr-label">🎯 Bonus items <span style="color:var(--muted);font-size:9px;font-weight:400;letter-spacing:0">(tap to reveal)</span></div>
+    <div class="tbr-items" id="tbrItems"></div>
+  </div>
+  <button class="btn-stop" onclick="stopTimer()">Pencils Down! Score It →</button>
+</div>
+
+<!-- ══ SCORING ══ -->
+<div id="scoring" class="screen">
+  <div class="screen-title">Score the Round</div>
+  <div class="scoring-prompt">Scene: <strong id="scoringPrompt">—</strong></div>
+
+  <!-- Best drawing vote -->
+  <div class="best-drawing-section card" style="width:100%;max-width:460px">
+    <div class="card-label">🏆 Best Drawing Vote <span style="color:var(--purple);font-size:10px">+3 pts</span></div>
+    <div class="best-drawing-grid" id="bestDrawingGrid"></div>
+  </div>
+
+  <div class="score-players" id="scorePlayers" style="max-width:460px;width:100%"></div>
+  <div class="btn-row" style="max-width:460px;width:100%">
+    <button class="btn-ghost" onclick="go('round-intro')">← Redo</button>
+    <button class="btn-primary" onclick="submitScores()">Lock In Scores →</button>
+  </div>
+</div>
+
+<!-- ══ LEADERBOARD ══ -->
+<div id="leaderboard" class="screen screen-center" style="gap:16px;max-width:400px;width:100%">
+  <div class="screen-title">🏆 Leaderboard</div>
+  <p class="screen-hint" id="lbRoundLabel">After Round 1</p>
+  <div class="leaderboard-list" id="leaderboardList"></div>
+  <div class="btn-row">
+    <button class="btn-ghost" onclick="resetGame();go('home')">New Game</button>
+    <button class="btn-primary" onclick="nextRound()">Next Round →</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════
+//  STATE
+// ════════════════════════════════
+const state = {
+  round: 1,
+  timerDuration: 30,
+  playerCount: 4,
+  currentPrompt: '',
+  currentBonuses: [],
+  timerInterval: null,
+  timeLeft: 30,
+  players: [],
+  scores: [],
+  bestDrawingVote: -1,
+  aiPrompts: [],
+};
+
+const DEFAULT_PROMPTS = [
+  "A chaotic birthday party","A day at the zoo gone wrong","A beach day disaster",
+  "A wizard doing taxes","A cat running for president","Space aliens at a drive-thru",
+  "A robot learning to cook","A knight stuck in traffic","A haunted gym class",
+  "A penguin starting a startup","Sharks judging a beauty pageant","A snail winning a marathon",
+  "A pirate in a supermarket","Time traveler at a fast food joint","A dragon at the dentist",
+];
+
+const BONUS_POOL = [
+  {icon:"🦀",name:"crab",pts:2},{icon:"🕶",name:"sunglasses",pts:2},
+  {icon:"🏄",name:"broken surfboard",pts:3},{icon:"🎂",name:"melting cake",pts:2},
+  {icon:"🎈",name:"popped balloon",pts:1},{icon:"🦆",name:"rubber duck",pts:2},
+  {icon:"🌵",name:"cactus",pts:3},{icon:"🪄",name:"magic wand",pts:2},
+  {icon:"🍕",name:"flying pizza",pts:2},{icon:"🎩",name:"top hat",pts:1},
+  {icon:"🐍",name:"sneaky snake",pts:3},{icon:"🎸",name:"tiny guitar",pts:2},
+  {icon:"💼",name:"briefcase",pts:1},{icon:"🌈",name:"tiny rainbow",pts:3},
+  {icon:"🦷",name:"single tooth",pts:4},{icon:"⛵",name:"paper boat",pts:2},
+  {icon:"🧲",name:"magnet",pts:2},{icon:"🥄",name:"giant spoon",pts:3},
+];
+
+const AVATARS = ["🎨","🖍","✏️","🖌","📝","🎭","🎪","🃏"];
+const PLAYER_NAMES = ["Alex","Jordan","Sam","Taylor","River","Casey","Morgan","Blake"];
+const AVATAR_COLORS = ["#FF5C5C","#FFE135","#4BFFB5","#7B8FF5","#FF9E5C","#E55CFF","#5CCCFF","#FFBE5C"];
+
+// ════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  el.classList.add('active');
+  el.scrollTop = 0;
+}
+
+// ════════════════════════════════
+//  SETUP
+// ════════════════════════════════
+function selectTimer(el, val) {
+  document.querySelectorAll('.timer-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  state.timerDuration = val;
+}
+
+function changeCount(delta) {
+  state.playerCount = Math.max(2, Math.min(8, state.playerCount + delta));
+  document.getElementById('playerCount').textContent = state.playerCount;
+  renderPlayerNames();
+}
+
+function renderPlayerNames() {
+  const grid = document.getElementById('playerNamesGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < state.playerCount; i++) {
+    const currentName = state.players[i]?.name || PLAYER_NAMES[i];
+    const row = document.createElement('div');
+    row.className = 'pn-row';
+    row.innerHTML = `
+      <div class="pn-avatar" style="color:${AVATAR_COLORS[i]}">${AVATARS[i]}</div>
+      <input class="pn-input" id="pname-${i}" value="${currentName}" placeholder="Player ${i+1}" maxlength="12">
+    `;
+    grid.appendChild(row);
+  }
+}
+
+function initPlayers() {
+  state.players = Array.from({length: state.playerCount}, (_, i) => {
+    const inputEl = document.getElementById(`pname-${i}`);
+    const name = (inputEl && inputEl.value.trim()) || PLAYER_NAMES[i];
+    return { id: i, name, avatar: AVATARS[i], color: AVATAR_COLORS[i], totalScore: 0 };
+  });
+}
+
+// ════════════════════════════════
+//  AI PROMPT GENERATOR
+// ════════════════════════════════
+async function generateAIPrompt() {
+  const btn = document.getElementById('aiPromptBtn');
+  const label = document.getElementById('aiPromptBtnLabel');
+  btn.disabled = true;
+  label.innerHTML = '<span class="ai-loading">⟳</span> Generating prompts…';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: `You generate funny, visual, slightly absurd scene prompts for a family party drawing game suitable for all ages including young children.
+Return ONLY a JSON array of 5 strings. No markdown, no explanation, no preamble.
+Each prompt must be: short (3-7 words), funny, visual, slightly absurd, and 100% family-friendly — nothing scary, violent, gross, romantic, or inappropriate for kids.
+Good examples: ["A wizard doing taxes","Sharks at a prom","A snail winning NASCAR","Penguins running a bakery","A dragon at the dentist"]
+Never include anything involving weapons, injury, horror, romance, bodily humor, or adult themes.`,
+        messages: [{ role: 'user', content: 'Generate 5 new funny family-friendly drawing scene prompts.' }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content.find(c => c.type === 'text')?.text || '[]';
+    const clean = text.replace(/```json|```/g, '').trim();
+    state.aiPrompts = JSON.parse(clean);
+
+    const preview = document.getElementById('aiPromptPreview');
+    preview.style.display = 'block';
+    preview.innerHTML = `
+      <div class="card" style="border-color:rgba(180,92,255,0.3);background:rgba(180,92,255,0.06)">
+        <div class="card-label" style="color:var(--purple)">✨ AI Prompt Pack — tap to use</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${state.aiPrompts.map((p, i) => `
+            <button onclick="useAIPrompt(${i})" id="aip-${i}" style="background:rgba(255,255,255,0.04);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;text-align:left;cursor:pointer;color:var(--chalk);font-size:14px;font-weight:600;font-family:'Inter',sans-serif;transition:all 0.15s" onmouseover="this.style.borderColor='var(--purple)'" onmouseout="this.style.borderColor='var(--border)'">
+              ${p}
+            </button>`).join('')}
+        </div>
+      </div>`;
+    label.textContent = 'Regenerate AI Prompts';
+  } catch (e) {
+    label.textContent = 'AI unavailable — try again';
+  }
+  btn.disabled = false;
+}
+
+let selectedAIPrompt = null;
+function useAIPrompt(i) {
+  selectedAIPrompt = state.aiPrompts[i];
+  document.querySelectorAll('[id^=aip-]').forEach((el, j) => {
+    el.style.borderColor = j === i ? 'var(--purple)' : 'var(--border)';
+    el.style.color = j === i ? 'var(--purple)' : 'var(--chalk)';
+  });
+}
+
+// ════════════════════════════════
+//  ROUND START
+// ════════════════════════════════
+function startRound() {
+  initPlayers();
+  const promptPool = state.aiPrompts.length > 0 ? [...DEFAULT_PROMPTS, ...state.aiPrompts] : DEFAULT_PROMPTS;
+  state.currentPrompt = selectedAIPrompt || promptPool[Math.floor(Math.random() * promptPool.length)];
+  selectedAIPrompt = null;
+  const shuffled = [...BONUS_POOL].sort(() => Math.random() - 0.5);
+  state.currentBonuses = shuffled.slice(0, 3 + Math.floor(Math.random() * 2));
+
+  document.getElementById('roundBadge').textContent = `Round ${state.round}`;
+  document.getElementById('promptText').textContent = state.currentPrompt;
+
+  const container = document.getElementById('bonusItems');
+  container.innerHTML = '';
+  state.currentBonuses.forEach((b, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'bonus-chip';
+    chip.style.animationDelay = `${i * 0.1 + 0.3}s`;
+    chip.innerHTML = `<span class="chip-icon">${b.icon}</span><span class="chip-name">${b.name}</span><span class="chip-pts">+${b.pts}pt</span><div class="chip-cover"><span class="chip-cover-icon">👀</span><span class="chip-cover-text">Peek</span></div>`;
+    let peekTimer = null;
+    chip.addEventListener('pointerdown', () => {
+      chip.classList.add('peeking');
+      clearTimeout(peekTimer);
+      peekTimer = setTimeout(() => chip.classList.remove('peeking'), 1500);
+    });
+    chip.addEventListener('pointerup', () => { clearTimeout(peekTimer); peekTimer = setTimeout(() => chip.classList.remove('peeking'), 1500); });
+    container.appendChild(chip);
+  });
+  go('round-intro');
+}
+
+// ════════════════════════════════
+//  TIMER
+// ════════════════════════════════
+function startTimer() {
+  state.timeLeft = state.timerDuration;
+  const ring = document.getElementById('timerRing');
+  const num = document.getElementById('timerNumber');
+  const circumference = 565;
+  document.getElementById('timerPromptSmall').textContent = state.currentPrompt;
+  document.getElementById('tbrItems').innerHTML = state.currentBonuses.map(b =>
+    `<span class="tbr-item" onclick="this.classList.toggle('revealed')">${b.icon} ${b.name}</span>`).join('');
+  clearInterval(state.timerInterval);
+  updateUI();
+
+  state.timerInterval = setInterval(() => {
+    state.timeLeft--;
+    updateUI();
+    if (state.timeLeft <= 0) { clearInterval(state.timerInterval); stopTimer(); }
+  }, 1000);
+
+  function updateUI() {
+    const pct = state.timeLeft / state.timerDuration;
+    ring.style.strokeDashoffset = circumference * (1 - pct);
+    ring.style.stroke = state.timeLeft <= 10 ? '#FF5C5C' : '#FFE135';
+    num.textContent = state.timeLeft;
+    num.className = 'timer-number' + (state.timeLeft <= 10 ? ' urgent' : '');
+  }
+}
+
+function stopTimer() {
+  clearInterval(state.timerInterval);
+  buildScoringScreen();
+  go('scoring');
+}
+
+// ════════════════════════════════
+//  SCORING
+// ════════════════════════════════
+function buildScoringScreen() {
+  document.getElementById('scoringPrompt').textContent = state.currentPrompt;
+  state.scores = state.players.map(p => ({ id: p.id, bonuses: [], creativity: 0 }));
+  state.bestDrawingVote = -1;
+
+  // Best drawing vote buttons
+  const bdg = document.getElementById('bestDrawingGrid');
+  bdg.innerHTML = '';
+  state.players.forEach((p, pi) => {
+    const btn = document.createElement('button');
+    btn.className = 'bd-btn';
+    btn.id = `bd-${pi}`;
+    btn.innerHTML = `${p.avatar} ${p.name}`;
+    btn.onclick = () => voteBestDrawing(pi);
+    bdg.appendChild(btn);
+  });
+
+  // Per-player scoring rows
+  const container = document.getElementById('scorePlayers');
+  container.innerHTML = '';
+  state.players.forEach((p, pi) => {
+    const row = document.createElement('div');
+    row.className = 'score-row';
+    row.innerHTML = `
+      <div class="score-avatar" style="background:${p.color}22;color:${p.color}">${p.avatar}</div>
+      <div style="flex:1;min-width:0">
+        <div class="score-name">${p.name}</div>
+        <div style="margin-bottom:6px">
+          <div class="score-section-label">🎨 Creativity</div>
+          <div class="star-row" id="stars-${pi}">
+            ${[1,2,3].map(s => `<span class="star" onclick="setCreativity(${pi},${s})">⭐</span>`).join('')}
+          </div>
+        </div>
+        <div>
+          <div class="score-section-label">🎯 Bonus items included</div>
+          <div class="score-bonus-chips" id="chips-${pi}">
+            ${state.currentBonuses.map((b, bi) =>
+              `<span class="sbc unchecked" onclick="toggleBonus(${pi},${bi},this)">${b.icon} ${b.name}</span>`
+            ).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="score-pts" id="pts-${pi}">0</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function voteBestDrawing(pi) {
+  state.bestDrawingVote = pi;
+  document.querySelectorAll('.bd-btn').forEach((btn, i) => {
+    btn.classList.toggle('voted', i === pi);
+  });
+  // Update pts display for all (best vote may have changed)
+  state.players.forEach((_, i) => updatePts(i));
+}
+
+function toggleBonus(pi, bi, el) {
+  const s = state.scores[pi];
+  const idx = s.bonuses.indexOf(bi);
+  if (idx === -1) { s.bonuses.push(bi); el.classList.replace('unchecked','checked'); }
+  else { s.bonuses.splice(idx,1); el.classList.replace('checked','unchecked'); }
+  updatePts(pi);
+}
+
+function setCreativity(pi, stars) {
+  state.scores[pi].creativity = stars;
+  document.querySelectorAll(`#stars-${pi} .star`).forEach((s, i) => s.classList.toggle('lit', i < stars));
+  updatePts(pi);
+}
+
+function updatePts(pi) {
+  const s = state.scores[pi];
+  const bonusPts = s.bonuses.reduce((sum, bi) => sum + state.currentBonuses[bi].pts, 0);
+  const bestPts = state.bestDrawingVote === pi ? 3 : 0;
+  document.getElementById(`pts-${pi}`).textContent = bonusPts + s.creativity + bestPts;
+}
+
+function submitScores() {
+  state.scores.forEach((s, pi) => {
+    const bonusPts = s.bonuses.reduce((sum, bi) => sum + state.currentBonuses[bi].pts, 0);
+    const bestPts = state.bestDrawingVote === pi ? 3 : 0;
+    state.players[pi].totalScore += bonusPts + s.creativity + bestPts;
+  });
+  buildLeaderboard();
+  go('leaderboard');
+}
+
+// ════════════════════════════════
+//  LEADERBOARD
+// ════════════════════════════════
+function buildLeaderboard() {
+  const sorted = [...state.players].sort((a, b) => b.totalScore - a.totalScore);
+  document.getElementById('lbRoundLabel').textContent = `After Round ${state.round}`;
+  const list = document.getElementById('leaderboardList');
+  list.innerHTML = '';
+  sorted.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (i === 0 ? ' first' : '');
+    row.innerHTML = `
+      <div class="lb-rank">${i===0?'🏆':i+1}</div>
+      <div class="lb-avatar">${p.avatar}</div>
+      <div class="lb-name">${p.name}</div>
+      <div class="lb-score">${p.totalScore}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function nextRound() {
+  state.round++;
+  startRound();
+}
+
+function resetGame() {
+  state.round = 1;
+  state.players = [];
+  state.scores = [];
+  state.aiPrompts = [];
+  selectedAIPrompt = null;
+  document.getElementById('aiPromptPreview').style.display = 'none';
+  document.getElementById('aiPromptBtnLabel').textContent = 'Generate AI Prompt Pack';
+  renderPlayerNames();
+}
+
+// ════════════════════════════════
+//  BOOT
+// ════════════════════════════════
+renderPlayerNames();
+</script>
+<div class="game-footer">© 2026 <span>Poledna Games</span></div>
+</body>
+</html>
